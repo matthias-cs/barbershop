@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Fingerprint Auth Demo</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      margin-top: 50px;
+    }
+    button {
+      font-size: 16px;
+      padding: 10px 20px;
+      margin: 10px;
+    }
+    #output {
+      margin-top: 20px;
+      font-weight: bold;
+      color: green;
+    }
+  </style>
+</head>
+<body>
+  <h1>Fingerprint Authentication Demo</h1>
+  <button id="fingerprintButton">Trigger Fingerprint</button>
+  <button id="validateButton">Validate User</button>
+  <p id="output"></p>
+
+  <script>
+    // Utility: Convert base64url string to Uint8Array (required by WebAuthn)
+    function base64urlToUint8Array(base64urlString) {
+      const padding = '='.repeat((4 - base64urlString.length % 4) % 4);
+      const base64 = (base64urlString + padding)
+        .replace(/-/g, '+')
+        .replace(/_/g, '/');
+      const rawData = window.atob(base64);
+      const outputArray = new Uint8Array(rawData.length);
+      for (let i = 0; i < rawData.length; i++) {
+        outputArray[i] = rawData.charCodeAt(i);
+      }
+      return outputArray;
+    }
+
+    // Function to trigger fingerprint authentication using WebAuthn
+    async function triggerFingerprint() {
+      const outputElement = document.getElementById('output');
+      
+      // Dummy PublicKeyCredentialRequestOptions
+      const publicKey = {
+        // Normally, you would get a secure challenge from your server.
+        challenge: base64urlToUint8Array("randomchallengehere"),
+        // Leave allowCredentials empty to accept any registered credential (for demo purposes).
+        allowCredentials: [],
+        timeout: 60000,
+        userVerification: "required"
+      };
+
+      try {
+        // Trigger the fingerprint (or biometrics) prompt.
+        const credential = await navigator.credentials.get({ publicKey });
+        if (credential) {
+          outputElement.innerText = "Fingerprint verified: You are the owner!";
+          console.log("Authentication successful:", credential);
+        } else {
+          outputElement.innerText = "No credential returned.";
+        }
+      } catch (err) {
+        outputElement.innerText = "Authentication error: " + err;
+        console.error("Authentication failed:", err);
+      }
+    }
+
+    // A separate validation function as a placeholder for further logic
+    function validateUser() {
+      const outputElement = document.getElementById('output');
+      // This is where you could add additional checks such as session validation,
+      // comparing stored credential IDs, etc.
+      outputElement.innerText = "User validated. (Placeholder logic)";
+    }
+
+    // Event listeners for the buttons
+    document.getElementById('fingerprintButton').addEventListener('click', triggerFingerprint);
+    document.getElementById('validateButton').addEventListener('click', validateUser);
+  </script>
+</body>
+</html>
