@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Fingerprint Auth Demo</title>
+  <title>Smart Fingerprint Attendance</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -17,71 +17,98 @@
     #output {
       margin-top: 20px;
       font-weight: bold;
-      color: green;
     }
   </style>
 </head>
 <body>
-  <h1>Fingerprint Authentication Demo</h1>
-  <button id="fingerprintButton">Trigger Fingerprint</button>
-  <button id="validateButton">Validate User</button>
+  <h1>Smart Fingerprint Attendance</h1>
+
+  <button onclick="registerFingerprint()">1. Register Fingerprint</button>
+  <button onclick="triggerFingerprint()">2. Trigger Fingerprint</button>
+  <button onclick="validateUser()">3. Validate Owner</button>
+
   <p id="output"></p>
 
   <script>
-    // Utility: Convert base64url string to Uint8Array (required by WebAuthn)
-    function base64urlToUint8Array(base64urlString) {
-      const padding = '='.repeat((4 - base64urlString.length % 4) % 4);
-      const base64 = (base64urlString + padding)
-        .replace(/-/g, '+')
-        .replace(/_/g, '/');
-      const rawData = window.atob(base64);
-      const outputArray = new Uint8Array(rawData.length);
-      for (let i = 0; i < rawData.length; i++) {
-        outputArray[i] = rawData.charCodeAt(i);
-      }
-      return outputArray;
+    let currentCredential = null;
+    let isAuthenticated = false;
+
+    function bufferToBase64(buffer) {
+      return btoa(String.fromCharCode(...new Uint8Array(buffer)))
+        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
     }
 
-    // Function to trigger fingerprint authentication using WebAuthn
-    async function triggerFingerprint() {
-      const outputElement = document.getElementById('output');
-      
-      // Dummy PublicKeyCredentialRequestOptions
+    function base64ToBuffer(base64) {
+      const padding = '='.repeat((4 - base64.length % 4) % 4);
+      const base64Str = (base64 + padding).replace(/-/g, '+').replace(/_/g, '/');
+      const raw = atob(base64Str);
+      const buffer = new ArrayBuffer(raw.length);
+      const view = new Uint8Array(buffer);
+      for (let i = 0; i < raw.length; ++i) view[i] = raw.charCodeAt(i);
+      return buffer;
+    }
+
+    async function registerFingerprint() {
+      const output = document.getElementById('output');
+
       const publicKey = {
-        // Normally, you would get a secure challenge from your server.
-        challenge: base64urlToUint8Array("randomchallengehere"),
-        // Leave allowCredentials empty to accept any registered credential (for demo purposes).
-        allowCredentials: [],
+        challenge: Uint8Array.from(window.crypto.getRandomValues(new Uint8Array(32))),
+        rp: { name: "Barbershop Auth" },
+        user: {
+          id: Uint8Array.from('matthias', c => c.charCodeAt(0)),
+          name: "matthias@example.com",
+          displayName: "Matthias"
+        },
+        pubKeyCredParams: [{ type: "public-key", alg: -7 }],
+        authenticatorSelection: {
+          userVerification: "required",
+          authenticatorAttachment: "platform"
+        },
+        timeout: 60000,
+        attestation: "direct"
+      };
+
+      try {
+        const credential = await navigator.credentials.create({ publicKey });
+        currentCredential = credential;
+        isAuthenticated = false;
+        output.innerText = "Fingerprint registered successfully. Now you can authenticate.";
+        console.log("Registered credential:", credential);
+      } catch (err) {
+        output.innerText = "Registration failed: " + err;
+        console.error(err);
+      }
+    }
+
+    async function triggerFingerprint() {
+      const output = document.getElementById('output');
+
+      const publicKey = {
+        challenge: Uint8Array.from(window.crypto.getRandomValues(new Uint8Array(32))),
         timeout: 60000,
         userVerification: "required"
       };
 
       try {
-        // Trigger the fingerprint (or biometrics) prompt.
-        const credential = await navigator.credentials.get({ publicKey });
-        if (credential) {
-          outputElement.innerText = "Fingerprint verified: You are the owner!";
-          console.log("Authentication successful:", credential);
-        } else {
-          outputElement.innerText = "No credential returned.";
-        }
+        const assertion = await navigator.credentials.get({ publicKey });
+        isAuthenticated = true;
+        output.innerText = "Fingerprint verified successfully!";
+        console.log("Verified credential:", assertion);
       } catch (err) {
-        outputElement.innerText = "Authentication error: " + err;
-        console.error("Authentication failed:", err);
+        isAuthenticated = false;
+        output.innerText = "Authentication failed: " + err;
+        console.error(err);
       }
     }
 
-    // A separate validation function as a placeholder for further logic
     function validateUser() {
-      const outputElement = document.getElementById('output');
-      // This is where you could add additional checks such as session validation,
-      // comparing stored credential IDs, etc.
-      outputElement.innerText = "User validated. (Placeholder logic)";
+      const output = document.getElementById('output');
+      if (isAuthenticated) {
+        output.innerText = "You are the registered owner. Access granted.";
+      } else {
+        output.innerText = "Not verified. Please authenticate first.";
+      }
     }
-
-    // Event listeners for the buttons
-    document.getElementById('fingerprintButton').addEventListener('click', triggerFingerprint);
-    document.getElementById('validateButton').addEventListener('click', validateUser);
   </script>
 </body>
 </html>
