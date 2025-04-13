@@ -2,148 +2,131 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Fingerprint Auth Demo</title>
+  <title>Fingerprint Scan</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
     body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background: #f7f7f7;
-      text-align: center;
-      padding: 50px;
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      background: #f0f0f0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 50px 20px;
+      margin: 0;
     }
     h1 {
       color: #333;
+      margin-bottom: 40px;
     }
     .btn {
       background: #4CAF50;
       border: none;
       color: white;
-      padding: 15px 32px;
-      text-align: center;
-      font-size: 16px;
-      margin: 10px;
+      padding: 18px 36px;
+      font-size: 18px;
+      border-radius: 10px;
       cursor: pointer;
-      border-radius: 8px;
-      transition: background 0.3s ease;
+      transition: background 0.3s ease, transform 0.2s ease;
+      box-shadow: 0px 3px 6px rgba(0,0,0,0.15);
     }
-    .btn:hover {
+    .btn:hover { 
       background: #45a049;
+      transform: scale(1.02);
     }
     #output {
-      margin-top: 20px;
-      font-size: 18px;
-      font-weight: bold;
+      margin-top: 30px;
+      font-size: 20px;
       color: #333;
+      text-align: center;
+      line-height: 1.4;
     }
   </style>
 </head>
 <body>
-  <h1>Fingerprint Authentication Demo</h1>
-
-  <!-- Button to register the fingerprint credential -->
-  <button class="btn" onclick="registerFingerprint()">Register Fingerprint</button>
-  <!-- Button to trigger fingerprint authentication -->
-  <button class="btn" onclick="authenticateFingerprint()">Authenticate Fingerprint</button>
-
+  <h1>Fingerprint Verification</h1>
+  <button class="btn" id="scanButton" onclick="handleFingerprint()">Scan Fingerprint</button>
   <p id="output"></p>
 
   <script>
-    // Global storage for the registered credential
+    // Global variable to store the registered credential (if any)
     let registeredCredential = null;
 
-    // Utility functions to convert between ArrayBuffers and Base64URL strings
+    // Helper: Convert ArrayBuffer to Base64-URL encoded string
     function bufferToBase64(buffer) {
       const bytes = new Uint8Array(buffer);
-      let binary = '';
-      for (let i = 0; i < bytes.byteLength; i++) {
-        binary += String.fromCharCode(bytes[i]);
+      let binary = "";
+      for (let byte of bytes) {
+        binary += String.fromCharCode(byte);
       }
       return window.btoa(binary)
-        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_")
+        .replace(/=+$/, "");
     }
 
-    function base64ToBuffer(base64) {
-      const padding = '='.repeat((4 - base64.length % 4) % 4);
-      const base64Str = (base64 + padding).replace(/-/g, '+').replace(/_/g, '/');
-      const rawData = window.atob(base64Str);
-      const buffer = new ArrayBuffer(rawData.length);
-      const uint8Array = new Uint8Array(buffer);
-      for (let i = 0; i < rawData.length; i++) {
-        uint8Array[i] = rawData.charCodeAt(i);
-      }
-      return buffer;
-    }
-
-    // Fingerprint Registration:
-    async function registerFingerprint() {
-      const output = document.getElementById('output');
-
-      // Create a random challenge
-      const challenge = window.crypto.getRandomValues(new Uint8Array(32));
-
+    // Function to register the fingerprint credential if not already registered.
+    async function registerCredential() {
       const publicKey = {
-        challenge: challenge,
+        challenge: window.crypto.getRandomValues(new Uint8Array(32)),
         rp: { name: "Barbershop Auth" },
         user: {
-          id: Uint8Array.from("owner123", c => c.charCodeAt(0)),
+          id: Uint8Array.from("owner123", c => c.charCodeAt(0)), // Dummy user ID (owner only)
           name: "owner@example.com",
           displayName: "Barbershop Owner"
         },
-        pubKeyCredParams: [
-          { type: "public-key", alg: -7 } // ES256 algorithm
-        ],
+        pubKeyCredParams: [{ type: "public-key", alg: -7 }], // ES256
         authenticatorSelection: {
-          authenticatorAttachment: "platform", // use in-built authenticator
-          userVerification: "required"
+          authenticatorAttachment: "platform", // Force built-in authenticator
+          userVerification: "required"          // Require fingerprint or equivalent
         },
         timeout: 60000,
-        attestation: "none" // 'none' minimizes data exchange for demo purposes
+        attestation: "none"  // For demo purposes, no attestation needed
       };
 
-      try {
-        const credential = await navigator.credentials.create({ publicKey });
-        registeredCredential = credential;
-        output.innerText = "Fingerprint registered successfully.";
-        console.log("Registered Credential:", credential);
-      } catch (err) {
-        output.innerText = "Registration failed: " + err;
-        console.error("Error in registration:", err);
-      }
+      // Call WebAuthn to create a credential; this will bring up the fingerprint prompt
+      return await navigator.credentials.create({ publicKey });
     }
 
-    // Fingerprint Authentication:
-    async function authenticateFingerprint() {
-      const output = document.getElementById('output');
-      
-      if (!registeredCredential) {
-        output.innerText = "Please register your fingerprint first.";
-        return;
-      }
-
-      // Use the rawId from the registered credential to form allowCredentials
-      const allowCredentials = [{
-        type: "public-key",
-        id: registeredCredential.rawId,
-        transports: ["internal"]
-      }];
-
-      // Create a fresh challenge
-      const challenge = window.crypto.getRandomValues(new Uint8Array(32));
-
+    // Function to authenticate using the registered fingerprint credential
+    async function authenticateCredential(credential) {
       const publicKey = {
-        challenge: challenge,
+        challenge: window.crypto.getRandomValues(new Uint8Array(32)),
         timeout: 60000,
-        allowCredentials: allowCredentials,
+        // Only allow the previously registered credential. This forces the browser to use only that credential.
+        allowCredentials: [{
+          type: "public-key",
+          id: credential.rawId,
+          transports: ["internal"]
+        }],
         userVerification: "required"
       };
 
+      return await navigator.credentials.get({ publicKey });
+    }
+
+    // Combined handler: on first click, register; on subsequent clicks, authenticate.
+    async function handleFingerprint() {
+      const output = document.getElementById("output");
+      output.innerText = "Processing…";
+
       try {
-        const assertion = await navigator.credentials.get({ publicKey });
-        // For our demo, a successful assertion indicates correct fingerprint.
-        output.innerText = "Fingerprint authentication successful!";
-        console.log("Authentication Assertion:", assertion);
+        if (!registeredCredential) {
+          // No credential exists: register it.
+          output.innerText = "Registering your fingerprint…";
+          const cred = await registerCredential();
+          registeredCredential = cred;
+          output.innerText = "Fingerprint registered successfully. Please scan again.";
+          return; // End first run after registration.
+        }
+
+        // Credential registered: attempt authentication.
+        output.innerText = "Place your finger on the sensor…";
+        await authenticateCredential(registeredCredential);
+        output.innerText = "Fingerprint verified successfully!";
       } catch (err) {
-        output.innerText = "Authentication failed: " + err;
-        console.error("Error in authentication:", err);
+        // If any error occurs, output it.
+        output.innerText = "Fingerprint scan failed: " + err;
+        console.error("Error:", err);
       }
     }
   </script>
